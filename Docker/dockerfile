@@ -1,0 +1,90 @@
+Dockerfile creation:
+############################
+sudo docker rm -f $(docker_path)/$(Dockerfile)
+sudo docker rmi -f mywizphoenixtest.azurecr.io/mywizphoenixtest/dotnet-runtime8.0-alpine:latest
+sudo touch $(docker_path)/$(Dockerfile)
+sudo chmod 777 $(docker_path)/$(Dockerfile)
+sudo cat >> $(docker_path)/$(Dockerfile) << EOL
+FROM mywizphoenixtest.azurecr.io/mywizphoenixtest/dotnet-runtime8.0-alpine:latest
+COPY ./$(artifactId) /var/www/$(artifactId)/
+RUN ls -l /var/www/$(artifactId)/
+ADD $(servicefile) /etc/systemd/system/
+COPY ./$(artifactId)/$(cronfile) /etc/systemd/system/
+RUN ls -l /var/www/
+HEALTHCHECK --interval=30s --timeout=50s CMD curl --fail http://localhost:$(port_number) || exit 1
+RUN  /usr/sbin/crond start
+RUN sudo apk add dotnet8-sdk nodejs-current tzdata &&  sudo apk update && sudo apk add openjdk21 && sudo apk upgrade --available && sudo sync
+RUN rm -rf /usr/lib/node_modules/npm/node_modules/cross-spawn
+WORKDIR /var/www/$(artifactId)
+CMD sh -C '/var/www/$(artifactId)/$(cronfile)';'sh'
+EOL
+
+.NET docker file creation Overview.
+######################
+This Dockerfile builds a .NET application container using a custom Alpine-based runtime image, 
+copies application artifacts, installs required runtimes(Without this application cannot start), 
+configures health checks, and prepares cron-based execution. 
+
+To reduce docker image sizes, follow below points
+##############################
+#use smaller base images like alpine or slim 
+FROM python:3.10-slim, FROM node:18-alpine (These can reduce image sizes by MB)
+#Remove unncessary files 
+Ignore files using .dockerignore (using .dockerignore it copies only essential files, fastercopy and samller images. Docker first read .dockerignore)
+#combine RUN commands(Minimize docker layers by combining commands)
+#use fewer COPY and ADD statement
+#Use multistage builds(ex: build stage, Runtime stage)
+#Avoid running containers as root( running containers as non root user improves security)
+
+To reduce Docker image size, use minimal base images, multi-stage builds, 
+install only runtime dependencies, clean package manager caches, reduce layers, 
+use .dockerignore, and avoid multiple runtimes in a single container.
+
+docker daemon
+##############
+The Docker daemon is the background service that performs all Docker operations such as 
+building images, running containers, and managing Docker resources. 
+The Docker CLI communicates with the daemon to execute user commands.
+
+High level flow of how docker works
+Docker CLI  →  Docker Daemon  →  Containers / Images
+
+.dockerignore
+###############
+.dockerignore is placed alongside the Dockerfile and is used during the Docker build process 
+to exclude unnecessary files from the build context, reducing image size and build time.
+
+############################
+docker rm -f /var/www/Nexus_Downloaded_Artifacts Dockerfile_gen_API
+docker rmi -f mywizphoenixtest.azurecr.io/mywizphoenixtest/dotnet-runtime8.0-alpine:latest
+touch /var/www/Nexus_Downloaded_Artifacts Dockerfile_gen_API
+chmod 777 /var/www/Nexus_Downloaded_Artifacts Dockerfile_gen_API
+cat >> /var/www/Nexus_Downloaded_Artifacts Dockerfile_gen_API  << EOL
+FROM mywizphoenixtest.azurecr.io/mywizphoenixtest/dotnet-runtime8.0-alpine:latest
+COPY ./Accenture.GenWizard.WebAPI /var/www/Accenture.GenWizard.WebAPI
+
+
+python dockerfile creation overview.
+#######################
+This Dockerfile builds a Python 3.12 application using an AlmaLinux-based custom image, 
+copies application artifacts, installs PostgreSQL runtime libraries, and configures a health check endpoint. 
+It also attempts to configure cron-based execution.
+
+systemd is used to start, stop, and manage services automatically on Linux servers.
+
+Image Creation
+#####################
+echo "********************Login TO Docker********************"
+sudo docker login mywizphoenixtest.azurecr.io -u mywizphoenixtest -p $(DockerPassword)
+echo "********************Logged In********************"
+cd $(docker_path)
+echo "********************Removing Container Of $(image_name)********************"
+sudo docker rm -f $(image_name)
+echo "********************Removing Image Of $(image_name):$(release_id)********************"
+sudo docker rmi -f mywizphoenixtest.azurecr.io/mywizphoenixtest/$(image_name):$(release_id)
+echo "********************Building Docker Image Using $(Dockerfile)********************"
+sudo docker build --no-cache -f $(Dockerfile) -t  mywizphoenixtest.azurecr.io/mywizphoenixtest/$(image_name):$(release_id) .
+
+Tarfile creation
+###################
+sudo docker save -o $(image_name).tar mywizphoenixtest.azurecr.io/mywizphoenixtest/$(image_name):$(release_id)
