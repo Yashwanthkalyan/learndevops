@@ -1,0 +1,33 @@
+#Declarative Pipeline
+---------------------------
+pipeline {
+    agent any
+    stages {
+        stage ('Build')
+        steps {
+
+        }
+        stage ('sonarscan')
+        steps {
+
+        }
+        stage ('test')
+        steps {
+
+        }
+    }
+}
+
+#scripted Pipeline
+-----------------------
+node {
+    stage ('Build'){
+
+    }
+    stage ('test'){
+
+    }
+    stage ('deploy'){
+
+    }
+}

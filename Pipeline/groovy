@@ -1,0 +1,241 @@
+pipeline {
+	agent none
+    environment {
+        workspace_docker = "/root/workspace"
+        pom1 = "";
+        filesByGlob1 = "";
+        CREDS_JEN = "m14902"
+        CREDS_ITS = credentials("${CREDS_JEN}")
+        http_proxy = "http://sub.proxy.att.com:8080"
+        https_proxy = "http://sub.proxy.att.com:8080"
+        CUSTOM_BUILDNUMBER = VersionNumber projectStartDate: '', versionNumberString: '${BUILD_MONTH,XX}${BUILD_DAY,XX}_${BUILDS_TODAY}', versionPrefix: "iSMP_", worstResultForIncrement: 'NOT_BUILT'
+    }    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        disableConcurrentBuilds()
+        timestamps()
+    }
+	triggers {
+		pollSCM ''
+	}
+	stages {
+            stage ('Stage1 >') {
+                agent {
+                    node {
+                        label 'com.att.icap-clth189-tdqaismp1'
+                        customWorkspace "${WORKSPACE}"
+                    }
+                }
+                stages {        
+                    stage ('Package') {
+                        steps {
+                            script {
+                                git credentialsId: 'm14902', url: "${GIT_REPO}", branch: "${BRANCH}"
+								docker.image("dockercentral.it.att.com:5100/com.att.icap/tdata_base_jdk_mvn_git:latest").inside("-u root:root -v $HOME/.m2/:/root/.m2 -v ${WORKSPACE}:${workspace_docker}") {
+
+									sh "mvn clean install -f ${MODULE1}"
+									sh "chmod -R 777 ${workspace_docker}"
+                                }
+								pom1 = readMavenPom file: "${MODULE1}/pom.xml"
+    							filesByGlob1 = findFiles(glob: "${MODULE1}/target/${MODULE1}*.${pom1.packaging}")
+                            }
+                        }
+                    }
+                    stage ('Sonar_Scan') {
+                        steps {
+                            script {
+                            
+                               def properties = [:] 
+                                configFileProvider([configFile(fileId: 'SonarProperties', variable: 'CONFIG_PROPERTIES')]) { 
+                                echo "Loading the sonar properties from SonarProperties custom config file in Jenkins" 
+                                properties = readProperties file: CONFIG_PROPERTIES // load the properties from Jenkins custom config file 
+                                }     
+                                echo "************************"
+                                echo "CUSTOM_BUILDNUMBER: $CUSTOM_BUILDNUMBER"
+                                echo "------------------------"
+                                echo "workspace $WORKSPACE"
+                                echo "************************"
+                                withEnv(withSonarEnv.getPropertiesString(properties)) { 
+                                withEnv(["PATH+SONAR=${ tool 'sonar' }/bin"]) { 
+                                        sh '''#!/usr/bin/env bash 
+                                            while IFS= read -r -d '' item; do 
+                                                SONAR_SCANNER_OPTS+=( "$item" ) 
+                                            done < <([[ $SONAR_OPTS ]] && xargs printf '%s\\0' <<<"$SONAR_OPTS") 
+                                            echo Running sonar-scanner "${SONAR_SCANNER_OPTS[@]}" 
+                                            sonar-scanner "${SONAR_SCANNER_OPTS[@]}" \
+                                            -Dsonar.att.view.type=release \
+                                            -Dsonar.att.tattletale.enabled=false \
+                                            -Dsonar.projectKey=T.Data:21948:iSMP \
+                                            -Dsonar.projectName=iSMP \
+                                            -Dsonar.sources=${MODULE1}/src \
+                                            -Dsonar.java.binaries=${MODULE1}/target/classes \
+                                            -Dsonar.projectVersion=$CUSTOM_BUILDNUMBER \
+                                            -Dsonar.projectDescription=iSMP \
+                							-Dsonar.verbose=true \
+                                            -Dsonar.branch.name=feature/iSMPIntegrated
+                                            
+                                        ''' 
+                                    } 
+                                }
+                                sleep 5
+                            }
+                        }
+                    }
+                    stage ('Veracode_Scan') {
+            			steps {
+            				sh "zip -qr ${JOB_BASE_NAME}-${BUILD_NUMBER}.zip ${MODULE1}"
+            				withCredentials([usernamePassword(credentialsId: 'VERACODE_API', passwordVariable: 'veracodeKey', usernameVariable: 'veracodeID')]) {
+            					veracode applicationName: '21948-T.Data', createSandbox: true, criticality: 'VeryHigh', debug: true, fileNamePattern: '', pHost: 'one.proxy.att.com', pPassword: '', pPort: '8080', pUser: '', replacementPattern: '', sandboxName: 'iSMP', scanExcludesPattern: '', scanIncludesPattern: '', scanName: "${JOB_BASE_NAME}-${BUILD_NUMBER}", teams: '', uploadExcludesPattern: '', uploadIncludesPattern: "${JOB_BASE_NAME}-${BUILD_NUMBER}.zip", useProxy: true, vid: "$veracodeID", vkey: "$veracodeKey"
+            				}
+            				sleep 5
+            			}
+            		}
+                    stage ('Artifact_Upload') {
+                        steps {
+                            nexusArtifactUploader artifacts: [[artifactId: "${pom1.artifactId}", classifier: '', file: "${filesByGlob1[0].path}", type: "${pom1.packaging}"]], credentialsId: "${CREDS_JEN}", groupId: "${pom1.groupId}", nexusUrl: "${NEXUS_URL}", nexusVersion: 'nexus3', protocol: 'https', repository: "${NEXUS_REPO}", version: "${BUILD_NUMBER}"
+                            sleep 5
+                        }
+                    }
+                    stage ('Stage2 >') {
+                        agent {
+                            node {
+                                label 'com.att.icap-clth189-tdqaismp1'
+                            }
+                        }   
+                        stages {
+                            stage ('QA_Approval') {
+                                input {
+                                        message "Proceed to deploy on QA?"
+                                        ok "Proceed"
+                                        submitter "lc939f@csp.att.com,ys147a@csp.att.com"
+                                        parameters {
+                                            string(name: 'APPROVER_SIGN', defaultValue: '', description: '')
+                                        }
+                                    }		    
+                                steps {
+                                    echo "Approver Signature: \"${APPROVER_SIGN}\""
+                                }
+                            }                    
+                            stage ('QA_Deploy') {
+                                steps {
+        							script {
+        								sleep 30
+        								def GROUPID = "${pom1.groupId}".replaceAll("\\.","/")
+            							withCredentials([usernamePassword(credentialsId: 'm14902', passwordVariable: 'PASSWD', usernameVariable: 'UNAME')]) {
+            								sh "curl -O https://${NEXUS_URL}/repository/${NEXUS_REPO}/${GROUPID}/${pom1.artifactId}/${BUILD_NUMBER}/${pom1.artifactId}-${BUILD_NUMBER}.${pom1.packaging} -u ${UNAME}:${PASSWD} --max-time 900 --keepalive-time 2"
+            								sleep 10
+            								sh "cp ${pom1.artifactId}-${BUILD_NUMBER}.${pom1.packaging} ${QA_DEPLOY_DIR}/${MODULE1}/${pom1.artifactId}-${pom1.version}.${pom1.packaging}"
+            								sleep 5
+            								sh "make MODULE=${MODULE1} -f ${QA_DEPLOY_DIR}/${MODULE1}/Makefile cancel_all_jobs"
+            								sleep 10
+            								sh "make MODULE=${MODULE1} -f ${QA_DEPLOY_DIR}/${MODULE1}/Makefile ${MODULE1}"
+            							}								
+        							}
+                                }
+                            }    
+                        }
+                    }
+                } 
+                post {
+                    always {
+                        cleanWs()
+                    }        
+                }              
+            }
+            stage ('Stage3 >') {
+                agent {
+                    node {
+                        label 'com.att.icap-zlpy15453-tdismp1'
+                    }
+                }
+                stages {  
+                    stage ('Prod_Approval') {
+                        input {
+                                message "Proceed to deploy on PROD?"
+                                ok "Proceed"
+                                submitter "lc939f@csp.att.com,ys147a@csp.att.com"
+                                parameters {
+                                    string(name: 'APPROVER_SIGN', defaultValue: '', description: '')
+                                }
+                            }		    
+                        steps {
+                            echo "Approver Signature: \"${APPROVER_SIGN}\""
+                        }
+                    }                     
+                    stage ('Prod_Deploy') {         
+                        steps {
+                            script {
+								def GROUPID = "${pom1.groupId}".replaceAll("\\.","/")								
+								withCredentials([usernamePassword(credentialsId: 'm14902', passwordVariable: 'PASSWD', usernameVariable: 'UNAME')]) {
+    								sh "curl https://${NEXUS_URL}/repository/${NEXUS_REPO}/${GROUPID}/${pom1.artifactId}/${BUILD_NUMBER}/${pom1.artifactId}-${BUILD_NUMBER}.${pom1.packaging} -u ${UNAME}:${PASSWD} --output ${PROD_DEPLOY_DIR}/${pom1.artifactId}-${BUILD_NUMBER}.${pom1.packaging} --max-time 900 --keepalive-time 2"
+    								sh "mv ${PROD_DEPLOY_DIR}/${pom1.artifactId}-${BUILD_NUMBER}.${pom1.packaging} ${PROD_DEPLOY_DIR}/${pom1.artifactId}-${pom1.version}.${pom1.packaging}"
+    								sleep 5
+									sh "make MODULE=${MODULE1} -f ${PROD_DEPLOY_DIR}/${MODULE1}/Makefile cancel_all_jobs"
+									sleep 10
+									sh "make MODULE=${MODULE1} -f ${PROD_DEPLOY_DIR}/${MODULE1}/Makefile ${MODULE1}"
+								}
+                            }
+                        }
+                    }                  
+                }
+                post {
+                    always {
+                        cleanWs()
+                    }        
+                }
+            }
+        }
+    post {
+        success {
+            echo "BUILD SUCCESS!!!"
+            //emailext attachLog: true, body: "<font color=green><b><i>BUILD SUCCESS!</i></b></font><br>${BUILD_URL}", replyTo: 'lc939f@att.com,ys147a@att.com', subject: "MPR - BUILD#${BUILD_NUMBER} SUCCESS!", to: 'lc939f@att.com,ys147a@att.com', mimeType: 'text/html'
+        }
+        failure { echo "Only on failures" 
+            echo "BUILD FAILED!!!"
+            //emailext attachLog: true, body: "<font color=red><b><i>BUILD FAILED!</i></b></font><br>${BUILD_URL}", replyTo: 'lc939f@att.com,ys147a@att.com', subject: "MPR - BUILD#${BUILD_NUMBER} FAILED!", to: 'lc939f@att.com,ys147a@att.com', mimeType: 'text/html'
+        }
+        unstable {
+            echo "BUILD UNSTABLE!!!"
+            //emailext attachLog: true, body: "<font color=red><b><i>BUILD FAILED!</i></b></font><br>${BUILD_URL}", replyTo: 'lc939f@att.com,ys147a@att.com', subject: "MPR - BUILD#${BUILD_NUMBER} FAILED!", to: 'lc939f@att.com,ys147a@att.com', mimeType: 'text/html'
+        }    
+        always {
+            echo "BUILD FINISHED!!!"
+        }        
+    }
+}
+
+https://az-community-four.vci.att.com/jenkins/job/com.att.icap/job/iSMP/
+
+/opt/app/workload/mnt/common/v01/dev/landingzone/docker_infra_share/iSMP/jenkins - QA deploy dir - clth189.sldc.sbc.com (tdqaismp1)
+/opt/app/workload/mnt/common/v01/landingzone/tdismp1/workspace - Prod deploy dir - zlpy15453.vci.att.com 
+
+http://clth189.sldc.sbc.com:16001/#/overview   
+http://zlpy18009.vci.att.com:18009/#/overview
+
+
+cldd010-tdqart1
+If it prod agent goes offline:
+--------------------------------
+you can go to /home/tdismp1/jenkins  
+Stephen(7:37:09 PM): and run ./jnlp_agent.sh start "$(cat secret-file)" com.att.icap-zlpy15453-tdismp1  
+Stephen(7:37:17 PM): don't start bash ....  
+Stephen(7:37:53 PM): there's some issue on this server and others where the jnlp_agent.sh script throws an error under bash and won't start the agent 
+
+https://az-community-four.vci.att.com/jenkins/job/com.att.icap/job/iSMP/configfiles/editConfig?id=SonarProperties - Sonar cred
+https://sonar.it.att.com/account/security/ - To create a token as userid
+
+-------------------------------------------------------
+1f14661d4aff2d44160c220dbb3a80a5c20ec2e1 - New one
+
+sonar.login=10b55bef03e38dc27d9292c231fc49fc5ae0dc47 - old one
+--------------------------------------------------------
+/* beginning & */ending
+
+Sh - If it is linux will use in pipeline.
+bat - if it is windows OS
+Makefile - When docker is used to build, push to the central
+
+https://az-community-four.vci.att.com/jenkins/job/com.att.icap/job/5)%20Operations/job/TDataOps/job/ISMP_Jobs_resubmission/job/PROD_ISMP_job_restart/
+
+
+/opt/app/workload/mnt/common/v01/landingzone/tdismp1/workspace/flink-1.11.2/bin/flink list -r | grep Hyla
