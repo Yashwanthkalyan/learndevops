@@ -1,0 +1,30 @@
+#commands
+
+kubectl get pods - lists all the pods in the default namespace
+kubectl get pods -n dev - lists pods in the dev namespace
+kubectl describe pod <podname> - shows detailed information about a specific pod
+kubectl apply -f pod.definition.yaml - creates/updates a pod from yaml
+kubectl edit pod <podname>
+kubectl logs <podname> - to check the logs of a pod 
+kubectl logs -f <podname> - to check continous logs 
+
+
+kubcetl apply -f service.definition.yaml
+kubectl edit service <servicename>
+
+kubectl apply -f deployment.definition.yaml
+kubectl edit deployment <deploymentname>
+kubectl scale deployment <deployment name> --replicas=5 - scales replicasets to 5 
+kubectl rollout undo deployment <deployment name> - rollback to the previous version
+kubectl rollout history deployment <deployment name> - check history.
+
+kubcetl get namespaces - lists all the namespaces
+kubectl create namespace <namespacename> - creates the namespace
+kubectl delete namespace <namespacename> - deletes the namespace
+kubectl describe namespace <namespace> - shows the namespace details
+
+#to debug a creashing pod
+kubectl get pods 
+kubectl describe pod <podname> - it shows events, restart count, reason for failure.
+kubectl logs <podname> --previous  - When a pod is in CrashLoopBackoff, the container already 
+crashed and restarted, Normal kubectl logs may show nothing useful

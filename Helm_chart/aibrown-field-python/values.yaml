@@ -1,0 +1,112 @@
+# Default values for genwizard-api.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+app:
+  replicaCount: 1
+  repository: 153590191236.dkr.ecr.us-east-1.amazonaws.com/genwizard-dedicated-repo-dev
+  pullPolicy: Always
+  tag: "ai_brownfield_python_api_aci_6_4"
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+  resources:
+    limits:
+      cpu: "4000m"
+      memory: "8096Mi"
+    requests:
+      cpu: "4000m"
+      memory: "8096Mi"
+
+env:
+  name: "ASPNETCORE_ENVIRONMENT"
+  values: "Development"
+  name1: "ASPNETCORE_FORWARDEDHEADERS_ENABLED"
+  values1: "true"
+
+volumes:                    #volumes are defined at pod level
+  name: efs-mount           #this is persistant volume(pv-ex: efs, ebs)
+  persistentVolumeClaim:     #pvc
+    claimName: pvc-ad-claim  #this is persistantvolumeclaim(pvc)/pod requests storage from kubernetes, and kubernetes looks for a matching pv and attach storage to pod.
+
+volumeMounts:                             #volumemounts are defined at containerlevel
+  mountPath: /var/www/appConfigFiles      #container mounts at specified mountpath.
+  name: efs-mount
+  mountPath1: /mnt/myWizard-Phoenix
+  mountPath2: /var/www/Logs   
+
+service:
+  ports:
+    port: 80
+    protocol: TCP
+    targetPort: 9030
+  type: ClusterIP
+
+#annotations: 
+#    alb.ingress.kubernetes.io/scheme: internet-facing
+#    alb.ingress.kubernetes.io/target-type: ip
+#    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+#    alb.ingress.kubernetes.io/group.name: genwizard-eks
+#    alb.ingress.kubernetes.io/group.order: '2'
+#    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+#    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Ext2-2021-06
+#    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+#    alb.ingress.kubernetes.io/success-codes: "200-302"
+#    #alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=true
+#    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:153590191236:certificate/f24cef60-8a43-4b4c-bff6-dabb55fb0b29
+#    alb.ingress.kubernetes.io/load-balancer-arn: arn:aws:elasticloadbalancing:us-east-1:153590191236:loadbalancer/app/alb-nvipubdv-genwizard-eks/d1d25ae8b4ed9a50
+#albspec:
+#  ingressClassName: alb
+#  rules:
+#      host: genwizardapi-deveks.accenture.com
+#      http:
+#        paths:
+#          path: /aibrownfieldpy
+#          pathType: Prefix
+#          backend:
+#            service:
+#              name: aibrown-field-python-svc
+#              port:
+#                number: 443
+#
+hpa:                            #hpa increases pods based on the utilization levels.
+  minReplicas: 1                #vpa increases cpu/memory of pod based on the hostorical usage. 
+  maxReplicas: 3
+  metrics:
+    type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+      name1: memory
+      target1:
+        type: Utilization
+        averageUtilization: 80
+
+
+#crashloopbackoff
+-------------------
+#It means container keeps crashing after starting. 
+#reason
+---------------
+#bug in code
+#missing environment variables
+#port already in use
+#How to debug
+---------------
+#kubectl get pods -n <namespace>
+#kubectl describe pod <podname> -n <namespace> - shows events
+#kubectl logs <podname> --previous -n <namespace> - shows exact error (This shows the logs before container crashed)
+
+#Imagepullbackoff
+-------------------
+#It means unable to pull the image
+#reason
+---------
+#either image is not available in the registry
+#imagename incorrect
+#wrong tag
+#how to debug
+--------------
+#kubectl get pods -n <namespace>
+#Kubectl describe pod <podname>  -n <namespace>

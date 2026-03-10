@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Chart.Name }}
+  annotations: 
+    {{- toYaml .Values.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.albspec.ingressClassName }}
+  rules:
+    - host: {{ .Values.albspec.rules.host }}
+      http:
+        paths:
+        - path: {{ .Values.albspec.rules.http.paths.path }}
+          pathType: {{ .Values.albspec.rules.http.paths.pathType }}
+          backend:
+            service:
+              name: {{ .Chart.Name }}-svc
+              port:
+                number: {{ .Values.service.ports.port }}
+    - host: {{ .Values.albspec.rules.host1 }}
+      http:
+        paths:
+        - path: {{ .Values.albspec.rules.http1.paths.path }}
+          pathType: {{ .Values.albspec.rules.http1.paths.pathType }}
+          backend:
+            service:
+              name: {{ .Chart.Name }}-svc
+              port:
+                number: {{ .Values.service.ports.port }}

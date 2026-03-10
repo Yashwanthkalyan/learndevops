@@ -1,0 +1,84 @@
+# Default values for genwizard-api.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+app:
+  replicaCount: 1
+  repository: 153590191236.dkr.ecr.us-east-1.amazonaws.com/genwizard-dedicated-repo-dev
+  pullPolicy: Always
+  tag: "genwizard_python_api_6_4"
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+  resources:
+    limits:
+      cpu: "4000m"
+      memory: "4096Mi"
+    requests:
+      cpu: "4000m"
+      memory: "4096Mi"
+
+env:
+  name: "ASPNETCORE_ENVIRONMENT"
+  values: "Development"
+  name1: "ASPNETCORE_FORWARDEDHEADERS_ENABLED"
+  values1: "true"
+
+volumes:
+  name: efs-mount
+  persistentVolumeClaim:
+    claimName: pvc-ad-claim
+
+volumeMounts:
+  mountPath: /var/www/appConfigFiles
+  name: efs-mount
+  mountPath1: /mnt/myWizard-Phoenix
+  mountPath2: /var/www/Logs   
+
+service:
+  ports:
+    port: 80
+    protocol: TCP
+    targetPort: 9029
+  type: ClusterIP
+
+#annotations: 
+#    alb.ingress.kubernetes.io/scheme: internet-facing
+#    alb.ingress.kubernetes.io/target-type: ip
+#    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+#    alb.ingress.kubernetes.io/group.name: genwizard-eks
+#    alb.ingress.kubernetes.io/group.order: '3'
+#    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+#    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Ext2-2021-06
+#    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+#    alb.ingress.kubernetes.io/success-codes: "200-302"
+#    #alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=true
+#    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:153590191236:certificate/f24cef60-8a43-4b4c-bff6-dabb55fb0b29
+#    alb.ingress.kubernetes.io/load-balancer-arn: arn:aws:elasticloadbalancing:us-east-1:153590191236:loadbalancer/app/alb-nvipubdv-genwizard-eks/d1d25ae8b4ed9a50
+#albspec:
+#  ingressClassName: alb
+#  rules:
+#      host: genwizardapi-deveks.accenture.com
+#      http:
+#        paths:
+#          path: /genwizardpy
+#          pathType: Prefix
+#          backend:
+#            service:
+#              name: genwizard-python-svc
+#              port:
+#                number: 443
+#
+hpa:
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+      name1: memory
+      target1:
+        type: Utilization
+        averageUtilization: 80

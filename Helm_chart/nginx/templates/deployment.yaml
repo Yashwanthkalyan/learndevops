@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      #nodeName: ip-10-156-18-121.ec2.internal
+      containers:
+       - name: {{ .Chart.Name }}
+         image: "{{ .Values.app.repository }}:{{ .Values.app.tag }}"
+         imagePullPolicy: {{ .Values.app.pullPolicy }}
+         resources:
+           limits:
+             cpu: {{ .Values.app.resources.limits.cpu | quote }}
+             memory: {{ .Values.app.resources.limits.memory | quote }}
+           requests:
+             cpu: {{ .Values.app.resources.requests.cpu | quote }}
+             memory: {{ .Values.app.resources.requests.memory | quote }}
+         env:
+          - name: {{ .Values.env.name }}
+            value: {{ .Values.env.values }}
+          - name: {{ .Values.env.name1 }}
+            value: "{{ .Values.env.values1 }}"
