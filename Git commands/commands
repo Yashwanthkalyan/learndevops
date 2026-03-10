@@ -1,0 +1,47 @@
+#git commands
+
+# git flow
+Working Directory → Staging Area → Local Repository → Remote Repository
+      (edit)          (git add)       (git commit)      (git push)
+
+Working directory - where i am currently modifying the files
+staging area - the area between working directory and local repo whcih contains exact set of changes to include in the next commit. 
+local repo - local repo is .git directory. it is like a database inside the project.
+
+
+git clone
+git pull - pulls the changes from remote repo to working directory (use git pull when you are ready to integrate changes immediately)
+git fetch - fetches the changes from remote repo to local repo.( To review changes firt use git fetch) 
+git add . (stages the changes from working directory to staging area)
+git status
+git commit -m "message" (commits the changes from staging to local repo)
+git push (push the changes from local repo to remote repo)
+
+git branch (lists all branches)
+git branch branchname(creates a new branch)
+git checkout branchname(checkout to that specific branch)
+git branch -d branchname (deletes the mentioned branch)
+
+# use merge for main, release, production.
+# use git rebase for local feature branches before PR's.
+git merge - merge the changes from one branch to another branch by preserving full commit history.
+git rebase - merge the changes from one branch to another brnach by rewritting commit history.
+
+# use cherry-pick to specific commit from one brnach to another branch.
+git cherry pick - if we want to commit a specifc change to the branch then we use cherry pick.
+
+git stash - saves the current branch changes
+git stash list - lists all the stashes
+stash@{0}
+stash@{1}
+git stash show stash@{0} - shows the changes that are stored in stash@{0}.
+git stash pop stash@{0} -  applies the changes to current branch and removes the stash@{0} after applying. 
+git stash apply stash@{0} - applies the changes to current branch keep the stash without removing. 
+git stash drop stash@{0} - drops the stash.
+
+# submodules.
+git submodule update --init 
+git submodule update -- recursive 
+"git submodule update" syncs submodules to the commit referenced by main repository.
+
+
